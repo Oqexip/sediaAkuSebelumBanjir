@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard ESP32 Alarm</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f1f5f9;
+      text-align: center;
+      margin: 0;
+      padding: 30px;
+      color: #1e293b;
+    }
+
+    h1 { margin-bottom: 8px; }
+
+    #koneksi {
+      display: inline-block;
+      padding: 8px 14px;
+      border-radius: 20px;
+      background: #fee2e2;
+      color: #991b1b;
+      margin-bottom: 24px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      max-width: 800px;
+      margin: auto;
+    }
+
+    .card {
+      background: white;
+      padding: 22px;
+      border-radius: 12px;
+      box-shadow: 0 3px 12px #00000018;
+    }
+
+    .label {
+      color: #64748b;
+      font-size: 14px;
+    }
+
+    .nilai {
+      font-size: 30px;
+      font-weight: bold;
+      margin-top: 8px;
+    }
+
+    #alarm {
+      margin: 24px auto;
+      padding: 16px;
+      max-width: 500px;
+      border-radius: 10px;
+      font-size: 22px;
+      font-weight: bold;
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    button {
+      border: 0;
+      border-radius: 8px;
+      padding: 12px 18px;
+      margin: 6px;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    .mute { background: #dc2626; }
+    .aktif { background: #16a34a; }
+  </style>
+</head>
+
+<body>
+  <h1>Dashboard ESP32 Alarm</h1>
+  <div id="koneksi">Menghubungkan MQTT...</div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="label">Suhu</div>
+      <div class="nilai" id="suhu">-</div>
+    </div>
+
+    <div class="card">
+      <div class="label">Kelembapan</div>
+      <div class="nilai" id="kelembapan">-</div>
+    </div>
+
+    <div class="card">
+      <div class="label">Jarak</div>
+      <div class="nilai" id="jarak">-</div>
+    </div>
+  </div>
+
+  <div id="alarm">Menunggu data sensor...</div>
+
+  <button class="mute" onclick="kirimMute('ON')">Mute Buzzer</button>
+  <button class="aktif" onclick="kirimMute('OFF')">Aktifkan Buzzer</button>
+
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
+  <script>
+    const BROKER_URL = "ws://192.168.110.156:9001";
+    const TOPIC_STATUS = "rumah/esp32/alarm/status";
+    const TOPIC_MUTE = "rumah/esp32/alarm/cmd/mute";
+
+    const client = mqtt.connect(BROKER_URL, {
+      clientId: "dashboard-" + Math.random().toString(16).slice(2),
+      reconnectPeriod: 2000
+    });
+
+    client.on("connect", () => {
+      document.getElementById("koneksi").textContent = "MQTT terhubung";
+      document.getElementById("koneksi").style.background = "#dcfce7";
+      document.getElementById("koneksi").style.color = "#166534";
+
+      client.subscribe(TOPIC_STATUS);
+    });
+
+    client.on("reconnect", () => {
+      document.getElementById("koneksi").textContent = "Menyambungkan ulang...";
+    });
+
+    client.on("error", () => {
+      document.getElementById("koneksi").textContent = "MQTT gagal terhubung";
+    });
+
+    client.on("message", (topic, message) => {
+      if (topic !== TOPIC_STATUS) return;
+
+      try {
+        const data = JSON.parse(message.toString());
+
+        document.getElementById("suhu").textContent =
+          Number(data.suhu).toFixed(1) + " °C";
+
+        document.getElementById("kelembapan").textContent =
+          Number(data.kelembapan).toFixed(1) + " %";
+
+        document.getElementById("jarak").textContent =
+          Number(data.jarak).toFixed(1) + " cm";
+
+        const alarm = data.alarm === true;
+
+        document.getElementById("alarm").textContent =
+          alarm ? "⚠ ALARM: Objek terlalu dekat" : "✓ AMAN";
+
+        document.getElementById("alarm").style.background =
+          alarm ? "#fee2e2" : "#dcfce7";
+
+        document.getElementById("alarm").style.color =
+          alarm ? "#991b1b" : "#166534";
+      } catch (error) {
+        console.log("Data MQTT bukan JSON valid");
+      }
+    });
+
+    function kirimMute(perintah) {
+      if (!client.connected) {
+        alert("Dashboard belum terhubung ke MQTT.");
+        return;
+      }
+
+      client.publish(TOPIC_MUTE, perintah);
+    }
+  </script>
+</body>
+</html>
